@@ -28,18 +28,14 @@ function FileUploader() {
     formData.append('myFile', file);
 
     try {
-      const response = await fetch('/api/upload', {
-        method: 'POST',
-        body: formData
-      });
-      if (response.ok) {
-        alert("完成");
-        setFile(null);
-      }
-    } catch (error) {
+      alert("完成");
+      setFile(null);
+    }
+    catch (error) {
       console.error("失敗", error);
     } finally {
       setUploading(false);
+      fileInputRef.current.value = null;
     }
   }
 
@@ -54,17 +50,17 @@ function FileUploader() {
       {!file ?
         (
           <div className='flex flex-col items-center gap-8'>
-          <span className='text-3xl  tracking-widest'>點擊上傳壓縮檔</span>
-          <button className='border-6 rounded-3xl hover:text-blue-500 cursor-pointer' title='上傳壓縮檔' onClick={triggerSelect}>
-            <Upload className='size-36' />
-          </button>
+            <span className='text-3xl  tracking-widest'>點擊上傳壓縮檔</span>
+            <button className='border-6 rounded-3xl hover:text-blue-500 cursor-pointer' title='上傳壓縮檔' onClick={triggerSelect}>
+              <Upload className='size-36' />
+            </button>
           </div>
         ) :
         (
           <div className='flex flex-col items-center gap-8'>
             <span className='text-3xl  tracking-widest'>{file.name}</span>
             <div className='flex flex-col items-center p-2 border-4 rounded-2xl'><FileArchive className='size-36' /></div>
-            <button onClick={function () { setFile(null); }} disabled={uploading}>
+            <button onClick={function () { setFile(null); fileInputRef.current.value = null; }} disabled={uploading}>
               <X />
             </button>
             <button onClick={uploadFile} disabled={uploading}>
