@@ -4,7 +4,27 @@ import { Upload, FileArchive, X } from 'lucide-react';
 function FileUploader() {
   const [file, setFile] = useState(null);
   const [uploading, setUploading] = useState(false);
+  const [selectedOptions, setSelectedOptions] = useState([]);
+
   const fileInputRef = useRef(null);
+  const optionsList = [
+    { id: 1, name: "1", apiUrl: "/upload" },
+    { id: 2, name: "2", apiUrl: "/upload-folder" },
+    { id: 3, name: "3", apiUrl: "/upload-github" },
+    { id: 4, name: "4", apiUrl: "/upload-github" },
+    { id: 5, name: "5", apiUrl: "/upload-github" },
+    { id: 6, name: "6", apiUrl: "/upload-github" },
+  ]
+
+  function handleCheckboxChange(id) {
+    if (selectedOptions.includes(id)) {
+      setSelectedOptions(selectedOptions.filter(function (item) {
+        return item !== id;
+      }));
+    } else {
+      setSelectedOptions([...selectedOptions, id]);
+    }
+  }
 
   function handleFileChange(event) {
     const selectedFile = event.target.files[0];
@@ -28,13 +48,14 @@ function FileUploader() {
     formData.append('myFile', file);
 
     try {
-      alert("完成");
+      alert(selectedOptions);
       setFile(null);
     }
     catch (error) {
       console.error("失敗", error);
     } finally {
       setUploading(false);
+      setSelectedOptions([]);
       fileInputRef.current.value = null;
     }
   }
@@ -63,6 +84,20 @@ function FileUploader() {
             <button onClick={function () { setFile(null); fileInputRef.current.value = null; }} disabled={uploading}>
               <X />
             </button>
+
+            <div>
+              {optionsList.map(function (opt) {
+                return (
+                  <label key={opt.id} className='flex'>
+                    <input type="checkbox" checked={selectedOptions.includes(opt.id)} onChange={function () { handleCheckboxChange(opt.id) }} />
+                    {opt.name}
+                  </label>
+
+                )
+              })
+              }
+            </div>
+
             <button onClick={uploadFile} disabled={uploading}>
               {uploading ? "執行中" : "開始上傳"}
             </button>
