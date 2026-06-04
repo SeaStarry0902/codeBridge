@@ -1,10 +1,9 @@
 @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@100..900&display=swap');
 @import "tailwindcss";
-
-@theme {
-  /* 2. 定義主題變數，Tailwind 會自動生成 .font-notc */
+@plugin "@tailwindcss/typography";
+/* @theme {
   --font-notc: "Noto Sans TC", ui-sans-serif, system-ui, sans-serif;
-}
+} */
 
 body {
   background-color: #f9fafb;
