@@ -1,23 +1,25 @@
 import React, { useState, useRef } from 'react';
-import { Upload, FileArchive, X } from 'lucide-react';
+import { Upload, FileArchive, X, FileText, ChevronRight } from 'lucide-react';
 
-function FileUploader({ onResult }) {
+// 💡 新增 activeTab 與 setActiveTab 傳入，用來控管全局的切換
+function FileUploader({ onResult, results, activeTab, setActiveTab }) {
   const [file, setFile] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [selectedOptions, setSelectedOptions] = useState([]);
-
+  const [githubUrl, setGithubUrl] = useState("");
+  const [isInputUrl, setIsInputUrl] = useState(false);
+  const [isUploadUrl, setIsUploadUrl] = useState(false);
   const baseUrl = "http://localhost:8000/api/v1/";
   const fileInputRef = useRef(null);
   const [optionList, setOptionList] = useState([
-    { id: 1, name: "生成api使用文件", apiUrl: "docs/api-docs/generate", selected: false },
-    { id: 2, name: "生成系統架構圖和ER圖", apiUrl: "diagrams/generate", selected: false },
-    { id: 3, name: "生成專案建制指南", apiUrl: "docs/env-guide/generate", selected: false },
-    { id: 4, name: "生成dockerfile", apiUrl: "dockerfile/generate", selected: false },
+    { id: 1, name: "生成api使用文件", apiUrl: "docs/api-docs/generate", selected: false, tag: "api_docs" },
+    { id: 2, name: "生成系統架構圖和ER圖", apiUrl: "diagrams/generate", selected: false, tag: "diagram" },
+    { id: 3, name: "生成專案建制指南", apiUrl: "docs/env-guide/generate", selected: false, tag: "env_guide" },
+    { id: 4, name: "生成dockerfile", apiUrl: "dockerfile/generate", selected: false, tag: "dockerfile" },
   ]);
 
   function handleCheckboxChange(opt) {
     setOptionList(optionList.map(o => o.id === opt.id ? { ...o, selected: !o.selected } : o));
-    console.log(opt);
     if (selectedOptions.some(item => item.id === opt.id)) {
       setSelectedOptions(selectedOptions.filter(item => item.id !== opt.id))
     } else {
@@ -39,9 +41,63 @@ function FileUploader({ onResult }) {
     }
   }
 
+  async function uploadUrl() {
+    if (!githubUrl) return;
+    setUploading(true);
+    try {
+      const res = await fetch("http://localhost:8000/api/v1/github/analyze-all", {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'accept': 'application/json'
+        },
+        body: JSON.stringify({
+          github_url: githubUrl,
+          generate: selectedOptions.map(opt => opt.tag)
+        })
+      })
+
+      const r = await res.json();
+      const allresult = [];
+      if (r.api_docs) {
+        allresult.push({
+          option: "API 使用文件",
+          content: r.api_docs.artifacts[0].content
+        })
+      }
+      if (r.diagram) {
+        allresult.push({
+          option: "系統架構圖與ER圖",
+          content: `\n## Architecture Diagram\n\`\`\`mermaid\n${r.diagram.artifacts[0].content}\n\`\`\`\n\n## ER Diagram\n\`\`\`mermaid\n${r.diagram.artifacts[1].content}\n\`\`\``
+        })
+      }
+      if (r.env_guide) {
+        allresult.push({
+          option: "專案建制指南",
+          content: r.env_guide.artifacts[0].content
+        })
+      }
+      if (r.dockerfile) {
+        allresult.push({
+          option: "Docker 相關文件",
+          content: `\n## Dockerfile\n\`\`\`dockerfile\n${r.dockerfile.artifacts[0].content}\n\`\`\`\n\n## Docker Compose\n\`\`\`yaml\n${r.dockerfile.artifacts[1].content}\n\`\`\`\n\n## Docker Ignore\n\`\`\`text\n${r.dockerfile.artifacts[2].content}\n\`\`\``
+        })
+      }
+      console.log("API 回傳的原始資料:", r);
+      console.log("整理後傳給主頁面的資料:", allresult);
+      onResult(allresult);
+      setActiveTab(0); // 預設選中第一個產生的檔案
+    }
+    catch (error) {
+      console.error("失敗", error);
+    }
+    finally {
+
+    }
+  }
+
   async function uploadFile() {
     if (!file) return;
-
     setUploading(true);
     const formData = new FormData();
     formData.append('file', file);
@@ -50,53 +106,37 @@ function FileUploader({ onResult }) {
       const resPromises = selectedOptions.map(async (opt) => {
         const response = await fetch(baseUrl + opt.apiUrl, {
           method: 'POST',
-          headers: {
-            'accept': 'application/json'
-          },
+          headers: { 'accept': 'application/json' },
           body: formData
         });
         if (response.ok) {
           const data = await response.json();
-          console.log("原始回傳資料:", data); 
           let markdown = '';
+          console.log("API 回傳的原始資料:", data);
 
-          // 1. 如果回傳包含系統架構圖 (Mermaid)
-          if (data.architecture_diagram) {
-            markdown += `## Architecture Diagram\n\`\`\`mermaid\n${data.architecture_diagram}\n\`\`\`\n\n`;
-            if (data.er_diagram) {
-              markdown += `## ER Diagram\n\`\`\`mermaid\n${data.er_diagram}\n\`\`\``;
-            }
+          if (data.artifacts && data.artifacts.length == 2) {
+            markdown += `\n## Architecture Diagram\n\`\`\`mermaid\n${data.artifacts[0].content}\n\`\`\`\n\n`;
+            markdown += `## ER Diagram\n\`\`\`mermaid\n${data.artifacts[1].content}\n\`\`\``;
           }
-          // 2. 如果回傳包含 Docker 相關內容（精準加上換行防禦）
-          else if (data.dockerfile_content || data.compose_content || data.dockerignore_content) {
-            if (data.dockerfile_content) {
-              // 💡 注意：\`\`\`dockerfile 後面一定要強制換行 \n
-              markdown += `# Dockerfile\n## Dockerfile\n\`\`\`dockerfile\n${data.dockerfile_content}\n\`\`\`\n\n`;
-            }
-            if (data.compose_content) {
-              // 💡 注意：\`\`\`yaml 後面一定要強制換行 \n
-              markdown += `## Docker Compose\n\`\`\`yaml\n${data.compose_content}\n\`\`\`\n\n`;
-            }
-            if (data.dockerignore_content) {
-              // 💡 注意：\`\`\`text 後面一定要強制換行 \n
-              markdown += `## Docker Ignore\n\`\`\`text\n${data.dockerignore_content}\n\`\`\``;
-            }
+          else if (data.artifacts && data.artifacts.length == 3) {
+            markdown += `\n## Dockerfile\n\`\`\`dockerfile\n${data.artifacts[0].content}\n\`\`\`\n\n`;
+            markdown += `## Docker Compose\n\`\`\`yaml\n${data.artifacts[1].content}\n\`\`\`\n\n`;
+            markdown += `## Docker Ignore\n\`\`\`text\n${data.artifacts[2].content}\n\`\`\``;
           }
-          // 3. 通用情況
           else {
             markdown = data.content || JSON.stringify(data);
           }
 
           return {
             option: opt.name,
-            content: markdown.trim()
+            content: markdown
           };
         }
       });
       const allResults = await Promise.all(resPromises);
-
-      console.log('所有 API 上傳成功，總結果為:', allResults);
-      onResult(allResults);
+      console.log("所有選項的結果:", allResults);
+      onResult(allResults.filter(Boolean)); // 過濾掉空值
+      setActiveTab(0); // 預設選中第一個產生的檔案
     }
     catch (error) {
       console.error("失敗", error);
@@ -108,49 +148,154 @@ function FileUploader({ onResult }) {
     }
   }
 
-  function triggerSelect() {
-    fileInputRef.current.click();
+  function resetUploader() {
+    setFile(null);
+    setOptionList(optionList.map(opt => ({ ...opt, selected: false })));
+    if (fileInputRef.current) fileInputRef.current.value = null;
+    onResult([]); // 清空主頁面的資料
   }
 
-  return (
-    <div className='flex justify-center mt-28'>
-      <input type="file" ref={fileInputRef} onChange={handleFileChange} accept=".zip,.rar,.7z" className="hidden" />
-
-      {!file ?
-        (
-          <div className='flex flex-col items-center gap-8'>
-            <span className='text-3xl  tracking-widest'>點擊上傳壓縮檔</span>
-            <button className='border-6 rounded-3xl hover:text-blue-500 cursor-pointer' title='上傳壓縮檔' onClick={triggerSelect}>
-              <Upload className='size-36' />
+  // 🌟 Gemini 風格：如果已有分析結果，左側轉化為精緻的歷史檔案列表 (Sidebar)
+  if (results && results.length > 0) {
+    return (
+      <div className="w-64 h-screen bg-gray-900 text-gray-300 flex flex-col justify-between border-r border-gray-800">
+        <div className="p-4 flex flex-col gap-4 overflow-y-auto flex-1">
+          <div className="flex items-center justify-between border-b border-gray-800 pb-3">
+            <span className="text-sm font-bold tracking-wider text-gray-400">分析產出文件</span>
+            <button onClick={resetUploader} className="p-1 hover:bg-gray-800 rounded text-red-400" title="重新上傳">
+              <X className="size-4" />
             </button>
           </div>
-        ) :
-        (
-          <div className='flex flex-col items-center gap-8'>
-            <span className='text-3xl  tracking-widest'>{file.name}</span>
-            <div className='flex flex-col items-center p-2 border-4 rounded-2xl'><FileArchive className='size-36' /></div>
-            <div className='grid grid-cols-2 gap-2'>
-              {optionList.map(function (opt) {
-                return (
-                  <label key={opt.id} className={`flex items-center w-auto h-10 px-2 gap-2 border-2 rounded-sm cursor-pointer transition-colors hover:bg-gray-200 ${opt.selected == true ? 'bg-gray-200 ' : 'bg-white '}`}>
-                    <input type="checkbox" className='size-4' checked={selectedOptions.some(item => item.id === opt.id)} onChange={function () { handleCheckboxChange(opt) }} />
-                    <span className=' tracking-wider'>{opt.name}</span>
-                  </label>
 
-                )
-              })
-              }
-            </div>
-            <div className="flex justify-center w-full gap-4">
-              <button className='flex-1 p-2 w-80 bg-blue-500 text-white hover:bg-blue-700 hover:text-black cursor-pointer border border-black rounded-sm' onClick={uploadFile} disabled={uploading}>
-                {uploading ? "執行中" : "開始上傳"}
+          {/* 檔案/功能選單清單 */}
+          <div className="flex flex-col gap-1">
+            {results.map((item, index) => (
+              <button
+                key={index}
+                onClick={() => setActiveTab(index)}
+                className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-sm transition-all text-left ${activeTab === index
+                  ? 'bg-blue-600 text-white font-medium shadow-md'
+                  : 'hover:bg-gray-800 text-gray-400 hover:text-gray-200'
+                  }`}
+              >
+                <div className="flex items-center gap-2.5 truncate">
+                  <FileText className="size-4 shrink-0" />
+                  <span className="truncate">{item.option}</span>
+                </div>
+                {activeTab === index && <ChevronRight className="size-4 shrink-0" />}
               </button>
-              <button className='group p-2 border rounded-sm bg-red-500 hover:bg-red-700 cursor-pointer ' onClick={function () { setFile(null); fileInputRef.current.value = null; }} disabled={uploading}>
-                <X className='size-6 text-white group-hover:text-black' />
-              </button>
-            </div>
+            ))}
           </div>
-        )}
+        </div>
+
+        {/* 側邊欄底部專案標記 */}
+        <div className="p-4 border-t border-gray-800 text-xs text-gray-500 flex items-center gap-2">
+          <FileArchive className="size-4 text-blue-500" />
+          <span className="truncate">{file?.name || "已載入專案"}</span>
+        </div>
+      </div>
+    );
+  }
+
+  // 初始尚未上傳的狀態（置中大框框）
+  return (
+    <div className='flex justify-center items-center h-screen w-full bg-gray-50'>
+      <input type="file" ref={fileInputRef} onChange={handleFileChange} accept=".zip,.rar,.7z" className="hidden" />
+
+      {!file ? (
+        <div className="flex flex-col items-center gap-10 ">
+          {!isUploadUrl ? (
+            <div className='flex flex-col items-center gap-6 bg-white p-10 rounded-2xl shadow-sm border border-gray-100'>
+              <span className='text-2xl font-medium tracking-wide text-gray-700'>點擊上傳專案壓縮檔</span>
+              <button className='p-6 border-4 border-dashed border-gray-200 rounded-3xl text-gray-400 hover:text-blue-500 hover:border-blue-300 transition-all cursor-pointer bg-gray-50' onClick={() => fileInputRef.current.click()}>
+                <Upload className='size-24' />
+              </button>
+            </div>
+          ) : null
+          }
+
+          <div className="w-full">
+            {!isInputUrl ? (
+              <button onClick={() => setIsInputUrl(!isInputUrl)} className='w-full h-16 border shadow-sm rounded-xl bg-white hover:bg-gray-200 cursor-pointer '>
+                <div className='flex items-center px-8 gap-6 '>
+                  <img src="/github.svg" alt="" className="size-10" />
+                  <span className="text-2xl">Github URL</span>
+                </div>
+              </button>
+            )
+              : (
+                !isUploadUrl ? (
+                  <form onSubmit={(e) => {
+                    e.preventDefault();
+                    setIsUploadUrl(true);
+                  }}>
+                    <input value={githubUrl} onChange={(e) => setGithubUrl(e.target.value)} type="text" placeholder="輸入 Github URL" className='w-full text-2xl px-4 h-16 border shadow-sm rounded-xl bg-white' />
+                    <div className="flex gap-2 mt-2">
+                      <button type="submit" className='flex-1 h-12  border border-black bg-blue-600 text-white font-medium hover:bg-blue-700 transition-colors cursor-pointer rounded-lg shadow-sm'>
+                        <span className="text-xl">選擇生成類型</span>
+                      </button>
+                      <button type="button" onClick={() => setIsInputUrl(!isInputUrl)} className='p-2.5 border bg-white rounded-lg hover:bg-red-50 hover:text-red-600 transition-colors cursor-pointer'>
+                        <X className='size-5' />
+                      </button>
+                    </div>
+                  </form>
+                )
+                  :
+                  <div className='flex flex-col items-center gap-6 bg-white p-10 rounded-2xl shadow-md border border-gray-100 w-full'>
+                    <span className='text-xl font-semibold tracking-wide text-gray-800 truncate max-w-xs'>{githubUrl}</span>
+                    <div className='flex flex-col items-center justify-center p-4'>
+                      {/* <FileArchive className='size-20 text-blue-500' /> */}
+                      <img src="/github.svg" alt="" className="size-32" />
+                    </div>
+
+                    <div className='grid grid-cols-1 gap-2 w-full'>
+                      {optionList.map((opt) => (
+                        <label key={opt.id} className={`flex items-center w-full h-11 px-3 gap-3 border rounded-lg cursor-pointer transition-all ${selectedOptions.some(item => item.id === opt.id) ? 'bg-blue-50 border-blue-200 text-blue-700 font-medium' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'}`}>
+                          <input type="checkbox" className='size-4 rounded accent-blue-600' checked={selectedOptions.some(item => item.id === opt.id)} onChange={() => handleCheckboxChange(opt)} />
+                          <span className='text-sm tracking-wide'>{opt.name}</span>
+                        </label>
+                      ))}
+                    </div>
+
+                    <div className="flex justify-center w-full gap-3 mt-2">
+                      <button className='flex-1 py-2.5 bg-blue-600 text-white font-medium hover:bg-blue-700 transition-colors cursor-pointer rounded-lg shadow-sm' onClick={uploadUrl} disabled={uploading}>
+                        {uploading ? "系統分析中..." : "開始上傳並生成"}
+                      </button>
+                      <button className='p-2.5 border border-gray-200 rounded-lg bg-gray-100 hover:bg-red-50 hover:text-red-600 transition-colors cursor-pointer' onClick={() => setIsUploadUrl(false)} disabled={uploading}>
+                        <X className='size-5' />
+                      </button>
+                    </div>
+                  </div>
+              )
+            }
+          </div>
+        </div>
+      ) : (
+        <div className='flex flex-col items-center gap-6 bg-white p-10 rounded-2xl shadow-md border border-gray-100 w-full max-w-md'>
+          <span className='text-xl font-semibold tracking-wide text-gray-800 truncate max-w-xs'>{file.name}</span>
+          <div className='flex flex-col items-center p-4 border border-gray-200 rounded-xl bg-gray-50'>
+            <FileArchive className='size-20 text-blue-500' />
+          </div>
+
+          <div className='grid grid-cols-1 gap-2 w-full'>
+            {optionList.map((opt) => (
+              <label key={opt.id} className={`flex items-center w-full h-11 px-3 gap-3 border rounded-lg cursor-pointer transition-all ${selectedOptions.some(item => item.id === opt.id) ? 'bg-blue-50 border-blue-200 text-blue-700 font-medium' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'}`}>
+                <input type="checkbox" className='size-4 rounded accent-blue-600' checked={selectedOptions.some(item => item.id === opt.id)} onChange={() => handleCheckboxChange(opt)} />
+                <span className='text-sm tracking-wide'>{opt.name}</span>
+              </label>
+            ))}
+          </div>
+
+          <div className="flex justify-center w-full gap-3 mt-2">
+            <button className='flex-1 py-2.5 bg-blue-600 text-white font-medium hover:bg-blue-700 transition-colors cursor-pointer rounded-lg shadow-sm' onClick={uploadFile} disabled={uploading}>
+              {uploading ? "系統分析中..." : "開始上傳並生成"}
+            </button>
+            <button className='p-2.5 border border-gray-200 rounded-lg bg-gray-100 hover:bg-red-50 hover:text-red-600 transition-colors cursor-pointer' onClick={resetUploader} disabled={uploading}>
+              <X className='size-5' />
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
