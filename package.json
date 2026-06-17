@@ -21,6 +21,7 @@
     "rehype": "^13.0.2",
     "rehype-raw": "^7.0.0",
     "remark-gfm": "^4.0.1",
+    "svg-pan-zoom": "^3.6.2",
     "tailwindcss": "^4.3.0"
   },
   "devDependencies": {
