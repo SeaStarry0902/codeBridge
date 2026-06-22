@@ -1,5 +1,11 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Send, Sparkles, X, Bot, User } from 'lucide-react';
+// 💡 引入 Markdown 與程式碼高亮套件
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
+import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
+import 'github-markdown-css/github-markdown.css';
 
 function Chatbot({ isOpen, onClose, activeData, sessionId }) {
     const [messages, setMessages] = useState([
@@ -23,6 +29,37 @@ function Chatbot({ isOpen, onClose, activeData, sessionId }) {
         chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, [messages, loading]);
 
+    // 💡 定義聊天室內專門渲染 Markdown 程式碼塊的組件
+    const chatRenderers = {
+        code({ node, inline, className, children, ...props }) {
+            const match = /language-(\w+)/.exec(className || '');
+            const language = match ? match[1] : 'text';
+
+            if (inline) {
+                return (
+                    <code className="bg-gray-100 text-red-600 px-1.5 py-0.5 rounded text-xs font-mono" {...props}>
+                        {children}
+                    </code>
+                );
+            }
+
+            return (
+                <div className="my-2 rounded-lg overflow-hidden shadow-inner text-xs font-mono max-w-full">
+                    <SyntaxHighlighter
+                        style={vscDarkPlus}
+                        language={language}
+                        PreTag="pre"
+                        showLineNumbers={false} // 聊天室代碼通常較短，關閉行號看起來比較乾淨
+                        customStyle={{ margin: 0, padding: '0.75rem' }}
+                        {...props}
+                    >
+                        {String(children).replace(/\n$/, '')}
+                    </SyntaxHighlighter>
+                </div>
+            );
+        }
+    };
+
     async function handleSendMessage(e) {
         e.preventDefault();
         if (!input.trim() || loading) return;
@@ -33,7 +70,6 @@ function Chatbot({ isOpen, onClose, activeData, sessionId }) {
         setLoading(true);
 
         try {
-            // 這裡對接你的後端 AI 路由
             const response = await fetch(`http://localhost:8000/qa/sessions/${sessionId}/ask`, {
                 method: 'POST',
                 headers: {
@@ -77,8 +113,16 @@ function Chatbot({ isOpen, onClose, activeData, sessionId }) {
                         <div className={`size-7 rounded-full flex items-center justify-center text-white shadow-sm shrink-0 ${msg.role === 'user' ? 'bg-blue-600' : 'bg-purple-600'}`}>
                             {msg.role === 'user' ? <User className="size-4" /> : <Bot className="size-4" />}
                         </div>
-                        <div className={`p-3 rounded-2xl text-sm leading-relaxed shadow-sm ${msg.role === 'user' ? 'bg-blue-600 text-white rounded-tr-none' : 'bg-white text-gray-800 border border-gray-100 rounded-tl-none'}`}>
-                            <p className="whitespace-pre-wrap">{msg.text}</p>
+                        {/* 💡 修改這裡：將原本的 <p> 標籤替換為 ReactMarkdown */}
+                        <div className={`p-3 rounded-2xl text-sm leading-relaxed shadow-sm overflow-hidden break-words ${msg.role === 'user' ? 'bg-blue-600 text-white rounded-tr-none' : 'bg-white text-gray-800 border border-gray-100 rounded-tl-none'}`}>
+                            <div className={`prose max-w-full text-sm ${msg.role === 'user' ? 'prose-invert text-white' : 'text-gray-800'}`}>
+                                <ReactMarkdown
+                                    remarkPlugins={[remarkGfm]}
+                                    components={chatRenderers}
+                                >
+                                    {msg.text}
+                                </ReactMarkdown>
+                            </div>
                         </div>
                     </div>
                 ))}

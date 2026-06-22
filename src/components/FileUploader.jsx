@@ -45,6 +45,47 @@ function FileUploader({ onResult, results, activeTab, setActiveTab, setSessionId
     if (!githubUrl) return;
     setUploading(true);
     try {
+      // 1. 先進行耗時的文件生成與分析
+      const res = await fetch("http://localhost:8000/api/v1/github/analyze-all", {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'accept': 'application/json'
+        },
+        body: JSON.stringify({
+          github_url: githubUrl,
+          generate: selectedOptions.map(opt => opt.tag)
+        })
+      });
+
+      const r = await res.json();
+      const allresult = [];
+      if (r.api_docs) {
+        allresult.push({
+          option: "API 使用文件",
+          content: r.api_docs.artifacts[0].content
+        });
+      }
+      if (r.diagram) {
+        allresult.push({
+          option: "系統架構圖與ER圖",
+          content: `\n## Architecture Diagram\n\`\`\`mermaid\n${r.diagram.artifacts[0].content}\n\`\`\`\n\n## ER Diagram\n\`\`\`mermaid\n${r.diagram.artifacts[1].content}\n\`\`\``
+        });
+      }
+      if (r.env_guide) {
+        allresult.push({
+          option: "專案建制指南",
+          content: r.env_guide.artifacts[0].content
+        });
+      }
+      if (r.dockerfile) {
+        allresult.push({
+          option: "Docker 相關文件",
+          content: `\n## Dockerfile\n\`\`\`dockerfile\n${r.dockerfile.artifacts[0].content}\n\`\`\`\n\n## Docker Compose\n\`\`\`yaml\n${r.dockerfile.artifacts[1].content}\n\`\`\`\n\n## Docker Ignore\n\`\`\`text\n${r.dockerfile.artifacts[2].content}\n\`\`\``
+        });
+      }
+
+      // 2. 🌟 文件完全生成成功後，才去獲得新鮮的 sessionId
       const getSessionID = await fetch('http://localhost:8000/qa/sessions/from-github', {
         method: 'POST',
         headers: {
@@ -58,56 +99,19 @@ function FileUploader({ onResult, results, activeTab, setActiveTab, setSessionId
 
       const sessionData = await getSessionID.json();
       setSessionId(sessionData.session_id);
-      console.log("取得的 Session ID:", sessionData.session_id);
+      console.log("成功生成文件後取得的 Session ID:", sessionData.session_id);
 
-      const res = await fetch("http://localhost:8000/api/v1/github/analyze-all", {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'accept': 'application/json'
-        },
-        body: JSON.stringify({
-          github_url: githubUrl,
-          generate: selectedOptions.map(opt => opt.tag)
-        })
-      })
-
-      const r = await res.json();
-      const allresult = [];
-      if (r.api_docs) {
-        allresult.push({
-          option: "API 使用文件",
-          content: r.api_docs.artifacts[0].content
-        })
-      }
-      if (r.diagram) {
-        allresult.push({
-          option: "系統架構圖與ER圖",
-          content: `\n## Architecture Diagram\n\`\`\`mermaid\n${r.diagram.artifacts[0].content}\n\`\`\`\n\n## ER Diagram\n\`\`\`mermaid\n${r.diagram.artifacts[1].content}\n\`\`\``
-        })
-      }
-      if (r.env_guide) {
-        allresult.push({
-          option: "專案建制指南",
-          content: r.env_guide.artifacts[0].content
-        })
-      }
-      if (r.dockerfile) {
-        allresult.push({
-          option: "Docker 相關文件",
-          content: `\n## Dockerfile\n\`\`\`dockerfile\n${r.dockerfile.artifacts[0].content}\n\`\`\`\n\n## Docker Compose\n\`\`\`yaml\n${r.dockerfile.artifacts[1].content}\n\`\`\`\n\n## Docker Ignore\n\`\`\`text\n${r.dockerfile.artifacts[2].content}\n\`\`\``
-        })
-      }
+      // 3. 最後渲染畫面
       console.log("API 回傳的原始資料:", r);
       console.log("整理後傳給主頁面的資料:", allresult);
       onResult(allresult);
-      setActiveTab(0); // 預設選中第一個產生的檔案
+      setActiveTab(0);
     }
     catch (error) {
       console.error("失敗", error);
     }
     finally {
-
+      setUploading(false); // 記得要在這裡補上關閉 loading 狀態
     }
   }
 
@@ -118,18 +122,7 @@ function FileUploader({ onResult, results, activeTab, setActiveTab, setSessionId
     formData.append('file', file);
 
     try {
-      const getSessionID = await fetch('http://localhost:8000/qa/sessions',{
-        method: 'POST',
-        headers: {
-          'accept': 'application/json'
-        },
-        body: formData
-        
-      })
-      const sessionData = await getSessionID.json();
-      console.log("取得的 Session ID:", sessionData);
-      setSessionId(sessionData.session_id); 
-
+      // 1. 先同步併發多個任務去生成文件
       const resPromises = selectedOptions.map(async (opt) => {
         const response = await fetch(baseUrl + opt.apiUrl, {
           method: 'POST',
@@ -160,10 +153,27 @@ function FileUploader({ onResult, results, activeTab, setActiveTab, setSessionId
           };
         }
       });
+
       const allResults = await Promise.all(resPromises);
-      console.log("所有選項的結果:", allResults);
-      onResult(allResults.filter(Boolean)); // 過濾掉空值
-      setActiveTab(0); // 預設選中第一個產生的檔案
+      const filteredResults = allResults.filter(Boolean); // 暫存過濾後的結果
+
+      // 2. 🌟 確認文件都拿到後，才去打後端 QA Session 路由，這樣 30 分鐘會重新算起
+      const getSessionID = await fetch('http://localhost:8000/qa/sessions', {
+        method: 'POST',
+        headers: {
+          'accept': 'application/json'
+          // ⚠️ 這裡保持你不寫 Content-Type 的正確做法，由瀏覽器自動處理
+        },
+        body: formData
+      });
+      const sessionData = await getSessionID.json();
+      console.log("文件分析完畢，新取得的 Session ID:", sessionData);
+      setSessionId(sessionData.session_id);
+
+      // 3. 渲染到主頁面
+      console.log("所有選項的結果:", filteredResults);
+      onResult(filteredResults);
+      setActiveTab(0);
     }
     catch (error) {
       console.error("失敗", error);
