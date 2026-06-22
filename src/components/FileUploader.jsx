@@ -2,7 +2,7 @@ import React, { useState, useRef } from 'react';
 import { Upload, FileArchive, X, FileText, ChevronRight } from 'lucide-react';
 
 // 💡 新增 activeTab 與 setActiveTab 傳入，用來控管全局的切換
-function FileUploader({ onResult, results, activeTab, setActiveTab }) {
+function FileUploader({ onResult, results, activeTab, setActiveTab, setSessionId }) {
   const [file, setFile] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [selectedOptions, setSelectedOptions] = useState([]);
@@ -45,6 +45,21 @@ function FileUploader({ onResult, results, activeTab, setActiveTab }) {
     if (!githubUrl) return;
     setUploading(true);
     try {
+      const getSessionID = await fetch('http://localhost:8000/qa/sessions/from-github', {
+        method: 'POST',
+        headers: {
+          'accept': 'application/json',
+          'content-type': 'application/json'
+        },
+        body: JSON.stringify({
+          github_url: githubUrl
+        })
+      });
+
+      const sessionData = await getSessionID.json();
+      setSessionId(sessionData.session_id);
+      console.log("取得的 Session ID:", sessionData.session_id);
+
       const res = await fetch("http://localhost:8000/api/v1/github/analyze-all", {
         method: 'POST',
         headers: {
@@ -103,6 +118,18 @@ function FileUploader({ onResult, results, activeTab, setActiveTab }) {
     formData.append('file', file);
 
     try {
+      const getSessionID = await fetch('http://localhost:8000/qa/sessions',{
+        method: 'POST',
+        headers: {
+          'accept': 'application/json'
+        },
+        body: formData
+        
+      })
+      const sessionData = await getSessionID.json();
+      console.log("取得的 Session ID:", sessionData);
+      setSessionId(sessionData.session_id); 
+
       const resPromises = selectedOptions.map(async (opt) => {
         const response = await fetch(baseUrl + opt.apiUrl, {
           method: 'POST',

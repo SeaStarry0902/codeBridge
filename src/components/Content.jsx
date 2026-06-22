@@ -214,7 +214,7 @@ function Content({ activeData, deleteResult }) {
     };
 
     return (
-        <div className="markdown-body p-6 max-w-4xl mx-auto h-full overflow-y-auto">
+        <div className="markdown-body p-6 w-full mx-auto h-full overflow-y-auto">
             <div className="mb-6 border-b pb-4">
                 <ReactMarkdown remarkPlugins={[remarkGfm]}>
                     {richMarkdown}
@@ -231,14 +231,6 @@ function Content({ activeData, deleteResult }) {
                 </ReactMarkdown>
             </div>
 
-            <div className="border-t border-gray-200 mt-12 pt-6 flex justify-end">
-                <button
-                    onClick={deleteResult}
-                    className="px-5 py-2.5 bg-red-500 hover:bg-red-600 text-white font-medium rounded-lg shadow-sm transition-colors cursor-pointer"
-                >
-                    刪除此結果
-                </button>
-            </div>
         </div>
     );
 }
