@@ -187,6 +187,11 @@ function FileUploader({ onResult, results, activeTab, setActiveTab, setSessionId
 
   function resetUploader() {
     setFile(null);
+    setUploading(false);
+    setSelectedOptions([]);
+    setGithubUrl("");
+    setIsInputUrl(false);
+    setIsUploadUrl(false);
     setOptionList(optionList.map(opt => ({ ...opt, selected: false })));
     if (fileInputRef.current) fileInputRef.current.value = null;
     onResult([]); // 清空主頁面的資料
@@ -266,9 +271,9 @@ function FileUploader({ onResult, results, activeTab, setActiveTab, setSessionId
                     e.preventDefault();
                     setIsUploadUrl(true);
                   }}>
-                    <input value={githubUrl} onChange={(e) => setGithubUrl(e.target.value)} type="text" placeholder="輸入 Github URL" className='w-full text-2xl px-4 h-16 border shadow-sm rounded-xl bg-white' />
+                    <input value={githubUrl} onChange={(e) => setGithubUrl(e.target.value)} type="text" placeholder="輸入 Github URL" className='w-76 text-2xl px-4 h-16 border shadow-sm rounded-xl bg-white' />
                     <div className="flex gap-2 mt-2">
-                      <button type="submit" className='flex-1 h-12  border border-black bg-blue-600 text-white font-medium hover:bg-blue-700 transition-colors cursor-pointer rounded-lg shadow-sm'>
+                      <button type="submit" className='flex-1 h-12 border border-black bg-blue-600 text-white font-medium hover:bg-blue-700 transition-colors cursor-pointer rounded-lg shadow-sm'>
                         <span className="text-xl">選擇生成類型</span>
                       </button>
                       <button type="button" onClick={() => setIsInputUrl(!isInputUrl)} className='p-2.5 border bg-white rounded-lg hover:bg-red-50 hover:text-red-600 transition-colors cursor-pointer'>

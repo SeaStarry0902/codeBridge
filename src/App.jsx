@@ -2,14 +2,14 @@ import { useState } from 'react'
 import Header from './components/Header'
 import FileUploader from './components/FileUploader'
 import Content from './components/Content'
-import Chatbot from './components/Chatbot' 
-import { MessageSquareShare } from 'lucide-react' 
+import Chatbot from './components/Chatbot'
+import { MessageSquareShare } from 'lucide-react'
 
 function App() {
-  const [results, setResults] = useState([]); 
-  const [activeTab, setActiveTab] = useState(0); 
-  const [isChatOpen, setIsChatOpen] = useState(false); 
-  const [sessionId, setSessionId] = useState(null); 
+  const [results, setResults] = useState([]);
+  const [activeTab, setActiveTab] = useState(0);
+  const [isChatOpen, setIsChatOpen] = useState(false);
+  const [sessionId, setSessionId] = useState(null);
 
   function handleDeleteResult() {
     const updatedResults = results.filter((_, index) => index !== activeTab);
@@ -43,7 +43,7 @@ function App() {
                   <span>詢問 AI 助手</span>
                 </button>
               )}
-              
+
               <Content
                 activeData={results[activeTab]}
                 deleteResult={handleDeleteResult}
@@ -59,11 +59,12 @@ function App() {
 
         {/* 💡 側邊 AI 聊天室 */}
         {results.length > 0 && (
-          <Chatbot 
-            isOpen={isChatOpen} 
-            onClose={() => setIsChatOpen(false)} 
-            activeData={results[activeTab]} 
+          <Chatbot
+            isOpen={isChatOpen}
+            onClose={() => setIsChatOpen(false)}
+            activeData={results[activeTab]}
             sessionId={sessionId}
+            isChatOpen={isChatOpen} // 💡 傳入此欄位
           />
         )}
       </div>
