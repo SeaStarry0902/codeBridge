@@ -153,7 +153,7 @@ function Chatbot({ isOpen, onClose, activeData, sessionId }) {
                 <div className="p-4 border-b border-gray-100 bg-gray-50 flex items-center justify-between shrink-0">
                     <div className="flex items-center gap-2 text-blue-600 font-semibold text-sm">
                         <Sparkles className="size-4 animate-pulse" />
-                        <span>Gemini 文件助手</span>
+                        <span>CodeBridge文件助手</span>
                     </div>
                     <button onClick={onClose} className="p-1 hover:bg-gray-200 rounded-lg text-gray-400 hover:text-gray-600 transition-colors">
                         <X className="size-4" />
